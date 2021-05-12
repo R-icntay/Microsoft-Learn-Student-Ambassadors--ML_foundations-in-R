@@ -1,0 +1,301 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+                      Support Vector Machines
+                      
+Support vector machines (SVMs) let us predict categories. This exercise will demonstrate a simple support vector machine that can predict a category from a small number of features.
+
+Our problem is that we want to be able to categorise which type of tree a new specimen belongs to. To do this, we will use leaf and trunk features of three different types of trees to train SVMs.
+
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(plotly)
+  library(e1071) ## SVM package
+})
+```
+
+
+Let's load up our data and perform a sanity check.
+
+```{r}
+library(readxl)
+trees <- read.csv("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/Data/trees.csv")
+View(trees)
+
+tree_data=trees %>% na.omit()
+glimpse(tree_data)
+
+# we can see that we have four features and one label (tree type)
+# We will look at the leaf features("leaf_width","leaf_length") and trunk features("trunk_girth","trunk_height") separately using scatter plots, and colour the points based on the label tree_type.
+
+## let's see the categories we are trying to predict
+table(tree_data$tree_type)
+```
+
+
+
+```{r}
+theme_set(theme_light())
+fig_leaf_features=tree_data %>% 
+  ggplot(mapping=aes(x=leaf_width,y=leaf_length))+
+  geom_point(aes(color=as.factor(tree_type)))+
+  ggtitle("Leaf length vs. leaf width coloured by tree type")+
+  labs(y="Leaf length",x="Leaf width",color="Tree type")
+
+ggplotly(fig_leaf_features)
+```
+
+Now let's plot the trunk features in a separate plot.
+
+```{r}
+fig_trunk_features=tree_data %>% 
+  ggplot(mapping = aes(x=trunk_girth,y=trunk_height))+
+  geom_point(aes(color=as.factor(tree_type)))+
+  ggtitle("Trunk height vs. trunk girth coloured by tree type")+
+  labs(x = "Trunk girth", y = "Trunk height", colour = "Tree type")
+
+ggplotly(fig_trunk_features)
+```
+
+There are some outliers, but for the most part, the features trunk girth and trunk height allow you to predict tree type.
+
+Now, say we obtain a new tree specimen and we want to figure out the tree type based on its leaf and trunk measurements. We could make a rough guess as to which tree type it belongs to based on where the tree data points lie in the two scatter plots we just created. Alternatively, using these same leaf and trunk measurements, SVMs can predict the tree type for us. SVMs will use the features and labels we provide for known tree types to create hyperplanes for tree type. These hyperplanes allow us to predict which tree type a new tree specimen belongs to, given their leaf and trunk measurements.
+
+
+```
+Let's make two SVMs using our data, tree_data: one SVM based on the leaf features, and another SVM based on the trunk features.
+
+The syntax for a simple SVM using the package e1071 is as follows:
+
+##?svm
+svm_model=svm(x=x,y=y,data=dataset)
+
+are taken from the environment which ‘svm’ is called from.
+
+x	
+a data matrix, a vector, or a sparse matrix (object of class Matrix provided by the Matrix package, or of class matrix.csr provided by the SparseM package, or of class simple_triplet_matrix provided by the slam package).
+
+y	
+a response vector with one label for each row/component of x. Can be either a factor (for classification tasks) or a numeric vector (for regression).
+
+For the svm function, we require two types of data structures: a matrix and a factor
+
+For our two SVMs, we will need to create the appropriate x and y variables based on tree_data. Which is quite easy using dplyr
+```
+
+
+```{r}
+x_leaf_data=tree_data %>% select(c(leaf_width,leaf_length)) %>% as.matrix()
+#glimpse(x_leaf_data)
+class(x_leaf_data)
+
+## great, our x input to the svm is a matrix. That went well. So next, let's convert our y variable into factors.
+
+tree_data=tree_data %>% mutate(tree_type=as.factor(tree_type))
+
+class(tree_data$tree_type) ## factor!!
+
+## Now we can run the function svm based on the leaf features stored in the new variable x_leaf_data, and the label saved in the variable tree_data$tree_type
+```
+
+Now we can run the function svm based on the leaf features stored in the new variable x_leaf_data, and the label saved in the variable tree_data$tree_type. The R documentation will come in handy
+
+
+```{r}
+svm_leaf_data=svm(x=x_leaf_data,y=tree_data$tree_type,type="C-classification",kernel="radial")
+
+## The SVM model based on leaf data is ready
+```
+
+ 
+To help us view the hyperplanes of the SVM based on the leaf data, we will create a fine grid of data points within the feature space to represent different combinations of leaf width and leaf length, and colour the new data points based on the predictions of svm_leaf_data.
+
+
+```{r}
+# Create a fine grid of the feature space
+
+leaf_width <- seq(from = min(tree_data$leaf_width), to = max(tree_data$leaf_width), length = 100)
+
+leaf_length <- seq(from = min(tree_data$leaf_length), to = max(tree_data$leaf_length), length = 100)
+
+fine_grid_leaf=as.data.frame(expand.grid(leaf_width,leaf_length))
+
+## View(fine_grid_leaf)
+
+##If you View(), the dataframe has columns Var1,Var2, let's rename them to something more appropriate
+
+fine_grid_leaf=fine_grid_leaf %>% rename(leaf_width=Var1,leaf_length=Var2)
+
+
+# let's check it out
+head(fine_grid_leaf)
+
+
+## how do we make predictions for svms?
+
+## ?predict.svm
+fine_grid_leaf$tree_pred=predict(svm_leaf_data,fine_grid_leaf,type="decision")
+
+head(fine_grid_leaf)
+
+## let's see the proportion of predictions for each level
+
+table(fine_grid_leaf$tree_pred)
+
+```
+
+Now we can create a scatter plot that contains the new fine grid of points we created above, and also the original tree data to see which group the different trees fall into based on the SVM svm_leaf_data.
+```{r}
+theme_set(theme_light())
+fig_leaf_pred=ggplot()+
+  geom_point(data=pred_leaf_data,aes(x=leaf_width,y=leaf_length,color=tree_type),size=3)+
+  stat_contour(data=pred_leaf_data,mapping = aes(x=leaf_width,y=leaf_length,z=as.integer(tree_pred)),lineend="round",linejoin="round",linemitre=1,color="black",size=0.25)
+  ## overlaying previous points
+  
+```
+
+
+```{r}
+theme_set(theme_light())
+fig_leaf_pred=ggplot()+
+  geom_point(data=fine_grid_leaf,mapping=aes(x=leaf_width,y=leaf_length,color=tree_pred),alpha=0.25)+
+  geom_contour(data=fine_grid_leaf,mapping = aes(x=leaf_width,y=leaf_length,z=as.integer(tree_pred)),lineend="round",linejoin="round",linemitre=1,color="black",size=0.25)+
+  ## overlaying previous points
+  geom_point(data=tree_data,aes(x=leaf_width,y=leaf_length,color=tree_type,shape=tree_type),size=3)+
+   ggtitle("SVM decision boundaries for leaf length vs. leaf width")+
+  labs(
+   
+    x="Leaf_width",
+    y="Leaf_length",
+    color="tree type",
+    shape="tree type"
+  )
+  
+ggplotly(fig_leaf_pred)
+```
+
+For the most part, our SVM can calculate tree type based on leaf features reasonably well, but let's determine the mis-classification rate. To do this, we will need to run the predict function again, but this time using our original data points as input. Note that this method is somewhat circular, since we used this same data to train the SVM, but we will run this just to give us an idea how well our SVM fits our data.
+
+
+
+
+```
+If we truly want to test the performance of our SVM, we need a training set with which to train the SVM, and an independent test/validation set with which to test the SVM.
+```
+
+```{r}
+pred_leaf_data=tree_data %>% select(leaf_width,leaf_length)
+
+## let's predict the tree type of our original dataset based on the SVM 'svm_leaf_data'
+
+pred_leaf_data=pred_leaf_data %>% mutate(tree_pred=(predict(svm_leaf_data,pred_leaf_data,type="decision")))
+
+#?inner_join
+#return all rows from x where there are matching values in y, and all columns from x and y. If there are multiple matches between x and y, all combination of the matches are returned.
+
+pred_leaf_data=inner_join(pred_leaf_data,tree_data,by=c("leaf_width","leaf_length"))%>% select(-c(trunk_girth,trunk_height))  
+
+#pred_leaf_data=pred_leaf_data %>% dplyr::select(-c(trunk_girth,trunk_height))
+
+## Create a table of predictions to show mis-classification rate
+
+table(pred=pred_leaf_data$tree_pred,actual=pred_leaf_data$tree_type)
+mean(pred_leaf_data$tree_pred!=pred_leaf_data$tree_type)*100
+
+#Our mis-classification rate is 6.5% which is actually preferable to a mis-classification rate of 0%, as the latter might indicate that the model has overfit the training data.
+```
+
+
+
+Step 3
+Now let's create our second SVM based on the trunk features. Remember, for the e1071::svm function, we need to create a new variable for input to the x argument, but we can use the same variable as before as input to y, tree_data$tree_type.
+
+
+
+```{r}
+## creating a matrix or the x input of svm()
+x_trunk_data=tree_data %>% select(c(trunk_girth,trunk_height))
+
+## creating an svm model
+svm_trunk_data=svm(x=x_trunk_data,y=tree_data$tree_type,type="C-classification",kernel="radial")
+
+## creating a fine grid of the feature space
+
+trunk_girth=seq(from=min(tree_data$trunk_girth),to=max(tree_data$trunk_girth),length=100)
+trunk_height=seq(from=min(tree_data$trunk_height),to=max(tree_data$trunk_height),length=100)
+
+
+
+fine_grid_trunk=expand.grid(trunk_girth,trunk_height) %>% as.data.frame()
+
+fine_grid_trunk=fine_grid_trunk %>% rename(trunk_girth=Var1,trunk_height=Var2)
+
+fine_grid_trunk2=fine_grid_trunk
+# Predict which tree type the new points fall into
+
+fine_grid_trunk=fine_grid_trunk %>% mutate(tree_pred=(predict(svm_trunk_data,fine_grid_trunk)))
+
+fine_grid_trunk2$tree_pred <- predict(svm_trunk_data, newdata = fine_grid_trunk2, type = "decision")
+
+table(fine_grid_trunk$tree_pred)
+table(fine_grid_trunk2$tree_pred)
+
+```
+
+
+Now we can create a scatter plot that contains the new fine grid of points we created above, and also the original tree data to see which group the different trees fall into based on the SVM svm_trunk_data.
+
+
+
+
+
+```{r}
+fig_trunk_pred=ggplot()+ 
+  geom_point(data=fine_grid_trunk,aes(x=trunk_girth,y=trunk_height,color=tree_pred),alpha=0.5)+
+  geom_contour(data=fine_grid_trunk,aes(x=trunk_girth,y=trunk_height,z=as.integer(tree_pred)),lineend = "round",linejoin = "round",linemitre = 1,size=0.25,color="black")+
+  geom_point(data=tree_data,aes(x=trunk_girth,y=trunk_height,color=tree_type,shape=tree_type),size=3)+
+  ggtitle("SVM decision boundaries for trunk girth vs. trunk height") +
+labs(x = "Trunk girth", y = "Trunk height", colour = "Tree type", shape = "Tree type") +
+theme(plot.title = element_text(hjust = 0.5))
+ggplotly(fig_trunk_pred)
+```
+
+
+Excellent! Again we can observe three faintly coloured zones based on the SVM's predictions of tree type for the fine grid of data points (based on trunk features), and the hyperplanes for the different tree types represented by thick black lines. We use these coloured zones and hyperplanes to observe which tree type the SVM has chosen to place our original data points into. Again, we observe two different classification scenarios: either our original data points are classified correctly by the SVM, or 2) our original data points are misclassified by the SVM.
+
+
+```
+Now let's run the predict function as we did earlier to determine the mis-classification rate of our SVM model based on trunk features.
+```
+
+
+
+```{r}
+## extracting the tree features we require
+
+
+pred_trunk_data=tree_data %>% select(c(trunk_girth,trunk_height))
+
+pred_trunk_data=pred_trunk_data %>% mutate(tree_pred=predict(svm_trunk_data,pred_trunk_data))
+
+pred_trunk_data=inner_join(pred_trunk_data,tree_data,by=c("trunk_girth","trunk_height")) %>% select(-c(leaf_width,leaf_length))
+
+table(pred=pred_trunk_data$tree_pred,actual=pred_trunk_data$tree_type)
+
+mean(pred_trunk_data$tree_pred!=pred_trunk_data$tree_type)*100
+
+##Here our mis-classification rate of the training data using the svm_trunk_data model is 4.5%, which is lower than the mis-classification rate of the svm_leaf_data model.
+```
+
+
+```
+That's it! We've made two simple SVMs that can predict the type of tree based on the leaf measurements and trunk measurements!
+```
+

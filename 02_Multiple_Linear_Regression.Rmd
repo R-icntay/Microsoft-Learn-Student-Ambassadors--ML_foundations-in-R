@@ -1,0 +1,240 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+              MULTIPLE LINEAR REGRESSION
+          
+Linear regression using multiple features is called multiple linear regression. Multiple linear regression is similar to simple linear regression, but rather than just using one feature to predict a label, it uses multiple features.
+
+From the previous exercise, we know that customers are happier with chocolate bars that are heavier and have a high percentage of cocoa. Customers may feel differently when they have to pay more for these bars though.
+
+we will try to find the chocolate bar that best suits customers, taking into account cocoa percentage, weight, and cost, using multiple linear regression.
+
+```{r}
+## first things first, we are Rtists, we need the tidyverse ooh and the package plot3D. Here's a trick I picked up along the way of loading multiple packages all at once.
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(plot3D)
+})
+
+```
+
+It's a good practice to perform a sanity check on your data. This means just inspecting its properties and all.
+
+```{r}
+chocolate.data.multiple.linear.regression <- read.delim("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/Data/chocolate data multiple linear regression.txt")
+choc_data=chocolate.data.multiple.linear.regression
+
+##let's check for any missing values in our dataset
+
+anyNA(choc_data)
+
+## great, no missing values.
+
+glimpse(choc_data) ## 100 rows and 4 columns
+
+View(choc_data)
+
+##see how you can view the first 10 rows and last 10 rows
+
+
+```
+
+
+                        Step 2
+Previously we found that customers like a high percentage of cocoa and heavier bars of chocolate. Large bars of chocolate cost more money, though, which might make customers less inclined to purchase them.
+
+Let's perform a simple linear regression to see the relationship between customer happiness and chocolate bar weight when the cost of the chocolate was taken into consideration for the survey.
+
+For this we will use our good old function from the previous exercis with some few modification and considering the price.
+
+```{r}
+lin_reg_choc= function(x,y,my_data){
+  
+  x_arg=my_data[ , substitute(x)]
+  y_arg=my_data[ , substitute(y)]
+  
+  ## let's perform linear regression using lm
+  
+  lm_choc=lm(y_arg~x_arg,data=my_data)
+  
+  ## saving lm_choc to the workspace instead of creating a list and all
+  lm_choc<<-lm_choc
+  ## we will be interested in the R squared value which checks
+  ## how well the simple linear regression model fits our data
+  
+  lm_summary=summary(lm_choc)$r.squared
+  
+  verdict= (if(lm_summary<0.3){
+    cat(lm_summary,":R² value of customer satisfaction given",gsub("_"," ",x),"is poor!")
+  })
+  
+  ## creating a scatter plot of choc_data together with linear model
+  
+plot=my_data %>% ggplot(mapping = aes_string(x=x,y=y))+
+    geom_point(size=1.5)+
+    # add a line based on linear model
+    geom_abline(intercept = lm_choc$coefficients[1],
+                slope = lm_choc$coefficients[2],
+                colour="green",
+                alpha=0.5,
+                lwd=1.5)+
+    ## y-axis remains(customer happiness) constant since we want to see how each variable eg weight,milk percent etc relates to it
+    ylab("Customer happiness")+
+    ## x-axis label; use 'gsub' function to remove underscore from the column label. Similar to strrep command in MATLAB
+    xlab(gsub("_"," ",x))+
+    ## graph title
+    ggtitle(paste("Customer satisfaction with chocolate bars given",gsub("_"," ",x)))
+## In R programming, functions do not return multiple values, however, there's a workaround, you can create a list with the outputs you want and return them.
+
+## change here too    
+return(list(plot,verdict))  
+
+}
+```
+
+Let's see how it performs with weight and cocoa_percent
+
+```{r}
+##check this out ?par:Set or Query Graphical Parameters
+
+##attach(choc_data)
+par(mfrow=c(1,2))
+lin_reg_choc(x="weight",y="customer_happiness",my_data = choc_data)
+lin_reg_choc(x="cocoa_percent",y="customer_happiness",my_data = choc_data)
+
+```
+
+Customer happiness still increases with larger bars of chocolate and more cocoa percent. However, many data points (black) are a long way from our linear regression model (green). This means that our model doesn't describe the data very well. It is likely that there are other features of the chocolate bars that are influencing customer happiness. 
+
+We can check how well our data fit our simple linear regression model by obtaining the R² values. R² values range between 0 - 1, where 1 is a perfect fit. What is a "good" or "bad" fit depends on several things, but for this exercise, numbers below 0.3 will mean a poor fit.
+
+All our R² values indicate that our model fits our data poorly
+
+Here is where multiple linear regression comes in.
+
+
+
+                      Step 3
+        
+        
+
+The problem with our chocolate bar survey is that the chocolate bar variables aren't controlled; cost, bar weight, and cocoa percent are different for every chocolate bar.
+
+We want to see the relationship between cocoa content and customer happiness, but cost and block weight are also influencing customer happiness.
+
+
+Alternatively, we can use multiple linear regression. Multiple linear regression gives us the relationship between each feature and customer happiness. These are provided as coefficients (slopes). Positive numbers indicate a positive relationship (i.e. customer happiness increases as this feature increases), negative numbers indicate a negative relationship (customer happiness decreases as this feature increases). 
+
+
+```{r}
+## let us create a multiple linear regression model which predicts customer happiness based on weight,cocoa percent and cost
+
+lm_choc_mlr=lm(customer_happiness~.,data = choc_data)
+
+summary(lm_choc_mlr)
+
+##Inspect the "Coefficients" heading within the results summary of our multiple linear regression model. In particular, look at the values in the "Estimate" column, which represent the estimate of the coefficients. Are the values positive or negative?
+
+coef(lm_choc_mlr) ##(coef is a generic function which extracts model coefficients from objects returned by modeling functions.)
+
+
+##The coefficients for weight and cocoa_percent are both positive, which means they both independently increase customer happiness.(an increase in either increases customer happiness) However the coefficient for cost is negative, which means increases in cost decrease customer happiness.
+
+## let's also see how well the mlr model fits our data
+
+summary(lm_choc_mlr)$r.squared
+
+## Way higher than before, so the mlr model better fits the data than the simple linear regression model
+```
+
+
+
+                          Step 4
+                        
+                  
+From our MLR model, we have an equation that predicts customer happiness based on weight, cocoa_percent and cost.
+
+```
+customer_happiness = -9.34 + weight * 0.106 + cocoa_percent * 31.9 + cost * -1.31
+```
+
+We might also know that, for our company, the cost of manufacturing and shipping each bar can be calculated as:
+
+
+```
+cost = (0.05 * weight + weight * cocoa_percent)^2 * 0.0004
+```
+
+
+From this, we can calculate the best bar for our customers, by balancing the cost against how happy the customer is likely to be with this product. Let's plot this in 3D to see what our optimum chocolate bar should be.
+
+
+
+
+```{r}
+## let us calculate customer happiness for a given bar of chocolate based on weight, cocoa percent, cost and intercept. For those who did not join us for our dplyr sessions last semester, mutate() creates a new column
+
+choc_data_mlr=choc_data %>% 
+  ## let's calculate adjusted cost based on shipping and manufacturing
+  mutate(cost_adj=(0.05*weight+weight*cocoa_percent)^2 * 0.0004) %>% 
+  ## calculating customer happiness based on mlr
+  mutate(cust_happ_mlr=(coef(lm_choc_mlr)["(Intercept)"])+
+           (coef(lm_choc_mlr)["weight"]*weight)+
+           (coef(lm_choc_mlr)["cocoa_percent"]*cocoa_percent)+
+           (coef(lm_choc_mlr)["cost"]*cost_adj)
+         )
+
+## let's perform a sanity check on our new data
+
+## let's calculate the adjusted cost and customer happiness for the first chocolate bar and see whether they coincide with our results
+cost_adj1=(choc_data$weight[1]*0.05 + choc_data$weight[1]*choc_data$cocoa_percent[1])^2 * 0.0004
+
+cost_adj1
+
+cust_happ_mlr1=-9.338917+(choc_data$weight[1]*0.106411)+
+  (choc_data$cocoa_percent[1]*31.935786+(0.6247322*-1.314457 ))
+
+cust_happ_mlr1
+
+head(choc_data_mlr,n=5)
+
+##Voila!! Perfect. Our math checked out
+```
+
+let's now create a 3D scatter plot using 'plot3D'package to investigate how an ideal chocolate bar should be taking into account the cost.
+
+```{r}
+
+scatter3D(x=choc_data_mlr$weight,
+          y=choc_data_mlr$cocoa_percent,
+          z=choc_data_mlr$cust_happ_mlr,
+          bty = "g",
+          col = gg2.col(alpha = 0.75),
+          pch= 16,
+          theta = 50,
+          phi=40,
+          xlab="Weight (x)",
+          ylab="Cocoa percent (y)",
+          zlab="Customer happiness (z)",
+          clab = "Customer\nhappiness",
+          ticktype="detailed"
+          
+          )
+
+```
+
+From  the 3D scatterplot, an optimum chocolate bar should have a weight of around 100g and very high Cocoa percent>90%.
+
+This is different from what we had concluded in simple linear regression where we assumed a larger bar with a high amount of cocoa would result in customer happiness.
+
+
+Great, now we have explored multiple linear regression where we tried to predict a label(customer happiness) taking into account how various features(weight, cocoa_percent, cost) independently account for customer happiness.

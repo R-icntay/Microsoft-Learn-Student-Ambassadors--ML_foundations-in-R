@@ -1,0 +1,190 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+```
+Logistic regression is a binary classification algorithm, meaning it predicts 2 categories (e.g. yes or no, win or loss etc.). Don’t be fooled by the ‘regression’ in the name, this simply means that it predicts the probability of a category.
+```
+This exercise will demonstrate simple logistic regression: predicting an outcome from only one feature. The standard logistic regression function, for predicting the outcome of an observation given a predictor variable (x), is an s-shaped curve.
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(glmnet)#This package fits lasso and elastic-net model paths for regression, logistic and multinomial regression using coordinate descent.
+  library(plotly)
+})
+```
+
+
+```
+We want to place a bet on the outcome of the next football (soccer) match. It is the final of a competition, so there will not be a draw. We have historical data about our favourite team playing in matches such as this.
+```
+
+```{r}
+football.data <- read.delim("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/Data/football data.txt")
+View(football.data)
+team_stats=football.data
+glimpse(team_stats) %>% na.omit(team_stats)
+summary(team_stats$average_goals_per_match)
+
+## The team_stats data shows the average goals per match of our team for the season in the first column, and whether the team won the competition in the second column. The won_competition variable is a binary outcome, where 1 represents a win, and 0 represents a loss.
+
+## Talking of winning, let's see our winning rate
+
+table(team_stats$won_competition)
+
+# Oh boy! we have lost 71 times and only won 29 times.. Okay..
+
+
+```
+
+
+```
+Let's graph the data so we have a better idea of what's going on.
+```
+
+
+```{r}
+theme_set(theme_light())
+fig_point_msp=team_stats %>% 
+  ggplot(mapping = aes(x=average_goals_per_match,y=as.factor(won_competition)))+
+  geom_jitter(aes(color=as.factor(won_competition)))+
+  ggtitle("Game statistics for Team MSP")+
+  xlab("Average number of goals scored per match")+
+  ylab("Competition win")+
+  ## align our title to the center
+  theme(plot.title = element_text(hjust =0.5))
+
+ggplotly(fig_point_msp)
+## We can see that in general, when our team has a good score average (x-axis>2.2823), they tend to win the competition.
+```
+
+
+
+```
+How can we predict whether the team will win this season? Let's apply AI to this problem, by making a logisitic regression model using this data and then graphing it.
+
+We will use the function glm, which stands for generalized linear models. We will set the type of model ("family" argument) as binomial logistic regression - to specify that we want a logistic regression model.
+```
+
+```{r}
+glm_team=glm(won_competition~average_goals_per_match,family = binomial(link="logit"), data=team_stats)
+
+coef(summary(glm_team))
+## The output above shows the estimate of the regression beta coefficients and their significance levels. The intercept (b0) is -11.38125 and the coefficient of average_goals_per_match   5.01224.
+
+#The logistic equation can be written as p = exp(-11.38125 +  5.01224*average_goals_per_match)/ [1 + exp(-11.38125 +  5.01224*average_goals_per_match]. Using this formula, for each average_goals_per_match, you can predict the probability of our team winning or losing
+
+##Predictions can be easily made using the function predict(). Use the option type = “response” to directly obtain the probabilities
+
+head(predict(glm_team,team_stats,type="response"))
+
+#team_stats_m=team_stats %>% mutate(pred=predict(glm_team,team_stats,type="response"))
+
+#View(team_stats_m %>% arrange(desc(average_goals_per_match)) %>% mutate(pred=round(pred,3)))
+
+
+```
+
+Alright, that's the model done. Now run the code below to graph it.
+
+
+```{r}
+fig_glm=team_stats %>% 
+  ggplot(mapping=aes(x=average_goals_per_match,y=won_competition))+
+  geom_point(aes(color=as.factor(won_competition),alpha=0.5,size=3))+
+  geom_smooth(method = "glm", se = FALSE, method.args = list(family = "binomial"),colour = "black")+
+  ggtitle("Binomial logistic regression model for football team competition win")+
+  xlab("Average number of goals scored per match") +
+ylab("Competition win") +
+theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels = c("0","","","","1"))
+ggplotly(fig_glm)
+
+
+#We now have a binomial logistic regression model to fit our data. The black line represents our model.
+
+```
+
+
+Now, let's choose the number of goals you want to evaluate.
+
+The code will calculate the probability that our team will win with your chosen number of goals in the match.
+
+
+
+```{r}
+goals=3
+
+## creating a data frame to serve as input for our predicting model 
+
+mean_goals=data.frame(average_goals_per_match=c(goals))
+
+mean_goals=mean_goals %>% mutate(prediction=predict(glm_team,mean_goals,type="response"))
+
+## let's then print out the result
+cat("The probability of our team winning this year is ",round(mean_goals$prediction,4)*100,"%")
+```
+
+Now let's plot our chosen number of goals in the context of our model using ggplot2:
+
+
+```{r}
+fig_newdata=team_stats %>% 
+  ggplot(mapping = aes(x=average_goals_per_match,y=won_competition))+
+  geom_point(aes(color=as.factor(won_competition)))+
+  geom_smooth(method="glm",se=FALSE,method.args=list(family="binomial"),color="black")+
+  geom_point(mapping=aes(x=mean_goals$average_goals_per_match,y=mean_goals$prediction),size=5,shape="cross")+
+ggtitle("Binomial logistic regression model for football team competition win") +
+xlab("Average number of goals scored per match") +
+ylab("Competition win") +
+theme(plot.title = element_text(hjust = 0.5), legend.position = "none") + 
+  geom_hline(yintercept = mean_goals$prediction,linetype="dashed")+
+  geom_vline(xintercept = mean_goals$average_goals_per_match,linetype="dashed")
+
+ggplotly(fig_newdata)
+```
+
+
+```{r}
+pred_win=function(goals){
+  
+mean_goals=data.frame(average_goals_per_match=c(goals))
+
+mean_goals=mean_goals %>% mutate(prediction=predict(glm_team,mean_goals,type = "response"))
+
+statement=paste("The probability of our team winning this year is ",round(mean_goals$prediction,4)*100,"%")
+
+fig_newdata=team_stats %>% 
+  ggplot(mapping = aes(x=average_goals_per_match,y=won_competition))+
+  geom_point(aes(color=as.factor(won_competition)))+
+  geom_smooth(method="glm",se=FALSE,method.args=list(family="binomial"),color="black")+
+  geom_point(mapping=aes(x=mean_goals$average_goals_per_match,y=mean_goals$prediction),size=5,shape="cross")+
+ggtitle("Binomial logistic regression model for football team competition win") +
+xlab("Average number of goals scored per match") +
+ylab("Competition win") +
+theme(plot.title = element_text(hjust = 0.5), legend.position = "none") + 
+  geom_hline(yintercept = mean_goals$prediction,linetype="dashed")+
+  geom_vline(xintercept = mean_goals$average_goals_per_match,linetype="dashed")
+
+fig_newdata=ggplotly(fig_newdata)
+
+disp=list(statement,fig_newdata)
+
+return(disp)
+
+
+
+
+}
+pred_win(2.5)  
+```
+

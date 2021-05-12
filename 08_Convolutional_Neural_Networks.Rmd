@@ -1,0 +1,615 @@
+---
+title: " "
+output:
+  html_document:
+    css: style.css
+    df_print: paged
+    theme: cerulean
+    highlight: breezedark
+    toc: TRUE
+    toc_float: TRUE
+    includes:
+      after_body: footer.html
+    
+---
+
+# **Classifying real-world images:** An R version
+
+Hello! Welcome to the fifth **R** code walkthrough of the session ***Machine Learning Foundations*** where the awesome [Laurence Moroney](https://www.linkedin.com/in/laurence-moroney),a Developer Advocate at Google working on Artificial Intelligence, takes us through the fundamentals of building machine learned models using TensorFlow.
+
+In this episode, [Episode 5](https://www.youtube.com/watch?v=0kYIZE8Gl90), Laurence Moroney takes us through yet another exciting application of Machine Learning.
+Here, we go beyond the Fashion MNIST and the MNIST datasets into more real-world images. We look at how to use Convolutional Neural Networks to classify complex features, with a hands-on example to tackle a more challenging computer vision problem--classifying images of horses and humans!
+
+Like the previous [R Notebooks](rpubs.eR_ic), this Notebook `tries` to replicate the [Python Notebook](https://colab.research.google.com/github/lmoroney/mlday-tokyo/blob/master/Lab5-Using-Convolutions-With-Complex-Images.ipynb#scrollTo=RXZT2UsyIVe_) used for this episode. The Python Notebook for this session is particularly exciting since it shows you how to create and manipulate directories within google colab itself, so you definitely should check it out.
+<br><br>
+Before we begin, I highly recommend that you go through [Episode 5](https://www.youtube.com/watch?v=0kYIZE8Gl90) first where Laurence Moroney demystifies the concepts of **convolution**, **pooling**, **imageGenerator** and **overfitting** in computer vision. Then you can come back and implement these concepts using R. I will try and highlight some of the stuff Laurence said and add some of my own for the sake of completeness of this post but I highly recommend you listen from him first.
+
+
+
+Let's start by loading the libraries required for this session.
+
+We'll be requiring some packages in the EBImage, Tidyverse and Keras(a framework for defining a neural network as a set of Sequential layers). You can have them installed as follows:
+
+For the [Tidyverse](https://www.tidyverse.org/), install the complete tidyverse with:
+```
+suppressMessages(install.packages("tidyverse"))
+```
+
+<br><br>
+
+[EBImage](https://bioconductor.org/packages/3.11/bioc/html/EBImage.html) is an R package distributed as part of the [Bioconductor](http://bioconductor.org/) project. To install the package, start R and enter:
+```
+install.packages("BiocManager")
+BiocManager::install("EBImage")
+```
+<br><br>
+The Keras R interface uses the TensorFlow backend engine by default. An elegant doucumentation for the installation of both the core Keras library as well as the TensorFlow backend can be found on the [R interface to Keras](https://keras.rstudio.com/reference/install_keras.html) website.
+
+
+
+
+Once installed, let's get rolling:
+
+
+
+
+# **Using Convolutions with Complex Images**
+In the previous labs we used the Fashion MNIST dataset to train an image classifier. In this case we had images that were 28x28 where the subject was centered. In this lab we'll take this to the next level, training to recognize features in an image where the subject can be anywhere in the image!
+
+We'll do this by building a horses-or-humans classifier that will tell you if a given image contains a horse or a human, where the network is trained to recognize features that determine which is which.
+
+In the case of Fashion MNIST, the data was built into TensorFlow via Keras. In this case the data isn't so we'll have to do some processing of it before we can train the Neural Network.
+
+Ps: I have replicated these exercises on a Windows 10 Pc.
+
+First, let's download the **training data** from [here](https://storage.googleapis.com/laurencemoroney-blog.appspot.com/horse-or-human.zip) and the **validation data** from [here](https://storage.googleapis.com/laurencemoroney-blog.appspot.com/validation-horse-or-human.zip) and unzip each individual file. Thank you Laurence Moroney for these gems.🙏🏿 🙏
+
+The contents of the .zip are extracted to the parent directories `horse-or-human` and `validation-horse-or-human`, which in turn each contain `horses` and `humans` subdirectories.
+
+One interesting thing to pay attention to in this exercise is that we do not explicitly label the images as horses or humans. If you remember with the fashion example earlier, we had labelled 'this is a 1', 'this is a 7' etc.
+
+
+Later you'll see something called an `ImageGenerator` being used -- and this is coded to read images from subdirectories, and automatically label them from the name of that subdirectory. So, for example, you will have a 'training' directory containing a 'horses' directory and a 'humans' one. ImageGenerator will label the images appropriately for you, reducing a coding step. Sounds neat, right?
+
+<br><br>
+Now, let's take a look at a few pictures in the `horses` and `humans` subdirectories under the `horse-or-human` parent directory to get a better sense of what they look like. The same can be done for the validation set
+
+
+```{r, fig.width= 11}
+library(EBImage)
+library(knitr)
+
+# List the Files in a Directory/Folder
+train_horses_names <- list.files(
+  path = "C:/Users/keras/Documents/tf_R/horse-or-human/horses",
+  pattern = ".png",
+  all.files = TRUE,
+  full.names = TRUE,
+  no.. = TRUE
+  )
+# total number of horse images in the directory
+cat("total training horse images:", length(train_horses_names), "\n")
+
+# List the Files in a Directory/Folder
+train_humans_names <- list.files(
+  path = "C:/Users/keras/Documents/tf_R/horse-or-human/humans",
+  pattern = ".png",
+  all.files = TRUE,
+  full.names = TRUE,
+  no.. = TRUE
+)
+# total number of human images in the directory
+cat("total training human images:", length(train_humans_names))
+```
+
+
+```{r fig.width= 11, fig.align='right'}
+# Awesome, now let's whip up some R code which randomly takes 8 pictures
+# of the horses and humans and displays them
+
+train_horses_disp <- sample(
+  train_horses_names,
+  size = 8,
+  replace = FALSE
+)
+train_humans_disp <- sample(
+  train_humans_names,
+  size = 8,
+  replace = FALSE
+)
+
+
+# reading the images in the paths into a single Image object containing an array of doubles
+img_ob <- EBImage::readImage(c(train_horses_disp,train_humans_disp))
+
+# displaying the randomly selected images
+img_disp <- EBImage::display(
+  img_ob,
+  method = 'raster',
+  all = TRUE,
+  nx = 4,
+  spacing = c(0,0)
+  
+)
+
+```
+
+
+
+
+
+
+
+
+# **Building a small model from scratch**
+<br><br>
+Very quickly, from the previous session:
+A `convolution` is a filter that passes over an image, processing it, and extracting features that show a commonolatity in the image such that if an image has certain features, it belongs to a particular class. Convolutional layers learn the features and pass these to the dense layers which map the learned features to the given labels.
+
+<br><br>
+`Pooling` reduces the amount of irrelevant information in an image while maintaining the features that are detected.
+
+
+```{r}
+suppressPackageStartupMessages({
+ library(tidyverse)
+library(keras) 
+})
+
+
+```
+
+### **Instantiating a Convolution**
+<br><br>
+We then add convolutional layers as in the previous example, and flatten the final result to feed into the densely connected layers. Finally we add the densely connected layers.
+
+
+
+```{r}
+model <- keras_model_sequential() %>%
+  # adding the first convolution layer with 16 3by3 filters
+  # we add an additional dimension in the input shape since convolutions operate over 3D tensors
+  # the input shape tells the network that the first layer should expect
+  # images of 300 by 300 pixels with a color depth of 3 ie RGB images
+  layer_conv_2d(input_shape = c(300, 300, 3), filters = 16, kernel_size = c(3,3), activation = 'reluBBBBNNN
+  # adding a max pooling layer which halves the dimensions
+  layer_max_pooling_2d(pool_size = c(2,2)) %>%
+  # adding a second convolution layer with 32 filters
+  layer_conv_2d(filters = 32, kernel_size = c(3,3), activation = 'relu') %>% 
+  # adding a pooling layer
+  layer_max_pooling_2d(pool_size = c(2,2)) %>% 
+  # increasing number of filters as image size decreases
+  layer_conv_2d(filters = 64, kernel_size = c(3,3), activation = 'relu') %>%      # adding a pooling layer
+  layer_max_pooling_2d(pool_size = c(2, 2))
+  
+```
+
+### **Adding a classifier to the convnet**
+<br><br>
+Convolutional layers learn the features and pass these to the dense layers which map the learned features to the given labels. Therefore, the next step is to feed the last output tensor into a densely
+connected classifier network like those we’re already familiar with: a stack of dense layers.
+These classifiers process vectors, which are 1D, whereas the current output is a 3D tensor. First we have to flatten the 3D outputs to 1D, and then add a few dense layers on top.
+
+Note that because we are facing a two-class classification problem, i.e. a binary classification problem, we will end our network with a [sigmoid activation](https://en.wikipedia.org/wiki/Sigmoid_function), so that the output of our network will be a single scalar between 0 and 1, encoding the probability that the current image is class 1 (as opposed to class 0). For more information about Keras activation functions, kindly visit the [Keras website](https://keras.io/api/layers/activations/).
+
+```{r}
+model <- model %>%
+  layer_flatten() %>%
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+model %>% summary()
+```
+
+Why do we have 1 output neuron yet it's a binary classification problem? If you have watched the episode, you probably know the answer. Sigmoid is equivalent to a 2-element Softmax, therefore, with a binary classification problem like this, you can get away with only 1 neuron and a sigmoid activation function which pushes values between 0 for one class and 1 for the other class.
+<br><br>
+**Compile:** Configuring a Keras model for training
+```{r}
+model %>%
+  compile(
+    loss = 'binary_crossentropy',
+    optimizer = optimizer_rmsprop(lr = 0.001),
+    metrics = c('accuracy')
+  )
+```
+
+Binary_ Crossentropy loss Computes the cross-entropy loss between true labels and predicted labels. Typically used when there are only two label classes.(For a refresher on loss metrics, see the [Machine Learning Crash Course](https://developers.google.com/machine-learning/crash-course/descending-into-ml/video-lecture) and the [Keras documentation(https://keras.io/api/losses/probabilistic_losses/#binary_crossentropy-function)]) 
+
+**NOTE**: In this case, using the [RMSprop](https://en.wikipedia.org/wiki/Stochastic_gradient_descent#RMSProp) optimization algorithm is preferable to [stochastic gradient descent](https://developers.google.com/machine-learning/glossary/#SGD) (SGD), because RMSprop automates learning-rate tuning for us. (Other optimizers, such as Adam and Adagrad, also automatically adapt the learning rate during training, and would work equally well here.)
+
+Learning happens by drawing random batches of data samples and their targets, and computing the gradient of the network parameters with respect to the loss on the batch. The network parameters are then moved a bit (the magnitude of the move is defined by the learning rate) in the opposite direction from the gradient.
+
+
+# **Data preprocessing**
+<br><br>
+Now that we have the data, we should format it into appropriately preprocessed floating-point tensors before being fed into the network.
+So the steps for getting it into the network are roughly as follows:
+
+1. Read the picture files.
+2. Decode the JPEG content to RGB grids of pixels.
+3. Convert these into floating-point tensors.
+4. Normalize the pixel values to the [0, 1] interval (It is uncommon to feed raw pixels into a convnet).
+5. Autolabel the images of horses and humans automatically based on the subdirectory name.
+
+It may seem a bit daunting, but thankfully Keras has utilities to turn image files on disk into batches of pre-processed tensors. Such image processing tools include the function `image_data_generator`.
+<br><br>
+```{r}
+# rescaling factor, the data will be multiplied by the value provided 
+train_datagen <- image_data_generator(rescale = 1/255)
+
+# Flow training images in batches of 128 using train_datagen generator
+
+train_generator <- flow_images_from_directory(
+  # This is the source directory for training images in my PC that
+  # contains the humans and horses subdirectories
+  directory = "C:/Users/keras/Documents/tf_R/horse-or-human",
+  # the train image generator we just created
+  generator = train_datagen,
+  # size of the images that the model should expect
+  target_size = c(300,300),
+  # 128 images at a time to be fed into the NN
+  batch_size = 128 ,
+   # Since we use binary_crossentropy loss, we need binary labels
+  class_mode = "binary"
+  
+)
+```
+<br><br>
+Maybe some few things to point out that could result into bugs:
+
+1. The `directory` is the folder that contains the labels sub-directories. Use the parent directory.
+2. For `class_mode` if you only have two classes keep it as `binary`, if you have more than two classes, keep it `categorical`.
+
+Let's do the same for the validation dataset
+<br><br>
+```{r}
+# creating a validation image generator
+
+validation_datagen <- image_data_generator(rescale = 1/255)
+
+validation_generator <- flow_images_from_directory(
+  directory = "C:/Users/keras/Documents/tf_R/validation-horse-or-human",
+ # the validation image generator we just created
+  generator = validation_datagen,
+  # size of the images that the model should expect
+  target_size = c(300,300),
+  # 128 images at a time to be fed into the NN
+  batch_size = 32 ,
+   # Since we use binary_crossentropy loss, we need binary labels
+  class_mode = "binary"
+  
+  
+)
+```
+
+
+# **Training the Neural Network**
+<br><br>
+This is the process of training the neural network, where it 'learns' the relationship between the train_images and train_labels arrays.
+
+Let’s fit the model to the data using the generator. You do so using the
+`fit_generator {keras}` function, the equivalent for `fit` for data generators like this one. It expects as its first argument a generator that will yield batches of inputs and targets indefinitely, like this one does. Because the data is being generated endlessly, the model needs to know how many samples to draw from the generator before declaring an epoch over. This is the role of the `steps_per_epoch` argument. It defines the total number of steps (batches of samples) to yield from generator before declaring one epoch finished and starting the next epoch. It should *typically* be equal to the *number of samples in your dataset divided by the batch size*. In our case, it should be around 8 (1027/128).
+`validation_steps` describes the total number of steps (batches of samples) to yield from generator before stopping at the end of every epoch. It should typically be equal to the number of samples of your validation dataset divided by the batch size.
+
+<br><br>
+
+ **Fitting the model using a batch generator**
+ 
+Let's train for 15 epochs -- this may take a few minutes to run.
+
+The Loss and Accuracy are a great indication of progress of training. It's making a guess as to the classification of the training data, and then measuring it against the known label, calculating the result. Accuracy is the portion of correct guesses.
+<br><br>
+```{r}
+history <- model %>%
+  fit_generator(
+    generator = train_generator,
+    steps_per_epoch = 8,
+    validation_data = validation_generator,
+    validation_steps = 8,
+    epochs = 15,
+    verbose = 1
+  )
+history
+
+# It’s good practice to always save your models after training.
+
+#save_model_hdf5(model, "horse-human_1.h5")
+
+```
+<br><br>
+Our model attains an accuracy of over 99% on the training set but doesn't perform so well on the validation set.
+This is due to something called **overfitting**, which means that the neural network is trained with very limited data -- there are only 500ish images of each class. So it's very good at recognizing images that look like those in the training set, but it can fail a lot at images that are not in the training set.
+
+This is a data point proving that the more data you train on, the better your final network will be!
+
+There are many techniques that can be used to make your training better, despite limited data, including something called Image Augmentation. That's beyond the scope of this lab.
+
+# **Generating predictions on new data**
+<br><br>
+This is the part where we evaluate how accurately the network learnt to classify the images using the test_set. 
+We'll download some images of horses and humans and see how well our model classifies non-CGI images it has never seen before.
+From this exercise's Python Notebook the `image_load {keras}` and `image_to_array {keras}` were used. These can easily be implemented in R too.
+For this post, in the spirit of adventure and curiosity, another approach of using a generator has been explored!
+Images of horses and humans were downloaded from the [pexels](https://www.pexels.com/license/) website. They were then saved in the `test_images` sub-directory under the parent directory `test-horse-human`.
+Below are the images used:
+
+<br><br>
+
+```{r, echo=FALSE, fig.cap= "Image source: pexels.com"}
+library(knitr)
+knitr::include_graphics("C:/Users/keras/Documents/OneDrive - Microsoft Student Partners/test_pics3.PNG")
+# https://holtzy.github.io/Pimp-my-rmd/
+#paste("Image source: pexels.com")
+```
+
+<br><br>
+
+**Implementing a data generator for the test images**
+```{r}
+test_datagen <- image_data_generator(rescale = 1/255)
+
+test_generator <- flow_images_from_directory(
+  directory = "C:/Users/keras/Documents/tf_R/test-horse-human",
+  generator = test_datagen,
+  target_size = c(300,300),
+  class_mode = 'binary',
+  batch_size = 10,
+  shuffle = FALSE
+  
+)
+```
+
+**Generating predictions for the test samples from a data generator.**
+
+```{r}
+predictions <- model %>% predict_generator(
+  generator = test_generator,
+  steps = 1,
+  verbose = 0
+)
+
+image_labels <-  list.files(path = "C:/Users/keras/Documents/tf_R/test-horse-human/test_images")
+pred_results <- as.data.frame(cbind(image_labels,predictions)) %>% rename("Prediction" = 2) %>% 
+  mutate(Prediction = as.double(Prediction), 
+  Predicted_class = if_else(Prediction>0.5, print("human"), print("horse")))
+
+pred_results
+```
+<br><br>
+
+Our model misclassified a Human (woman_1.jpeg) as a Horse. Not bad! We gotta ask ourselves what are the features that made the model think this was a horse. This is an example of the overfitting that was happening and maybe it's the long hair that led to the misclassification. Hopefully, the subsequent episodes in this course will help us fix this.
+
+
+# **Visualizing Intermediate Representations**
+<br><br>
+To get a feel for what kind of features our convnet has learned, one fun thing to do is to visualize how an input gets transformed by as it goes through a convnet's filters. Convnets aren't so 'black-boxes' after all.
+Let's get right into it.
+
+**Preprocessing an image into a 4D tensor.**
+
+This involves loading an image into a PIL format, representing the image as a 3D array with dimensions height, width and color_depth and finally adding a fourth dimension to indicate only one image is being processed.
+
+
+```{r, fig.align= 'left', fig.width=5}
+# taking an image at random
+horse_dir = sample(c(train_horses_names, train_humans_names), size = 1)
+img <- image_load(path = horse_dir, target_size = c(300,300))
+img_tensor <- image_to_array(img = img)
+img_tensor <- array_reshape(img_tensor, c(1, 300, 300, 3))
+
+# normalizing the pixel values
+img_tensor <- img_tensor / 255
+dim(img_tensor)
+
+# displaying the test picture
+plot(as.raster(img_tensor[1, , ,]))
+```
+<br><br>
+
+Awesome! Next, we'll create a Keras model that takes an input image and outputs all the activations of the convolution and pooling layers. To do this, we'll use the `keras_model {keras}` function which allows for models with multiple outputs (unlike `keras_model_sequential {keras}`). When fed an image input, this model will return the values of the layer activation in the original model. This model will thus have 1 input and 6 outputs(3 convolutions and 3 pooling layers).
+
+<br><br>
+**Instantiating a model from an input tensor and a list of output tensors**
+
+```{r}
+# Extracting the output of the top 6 layers
+layer_outputs <- lapply(model$layers[1:6], function(layer) layer$output)
+
+# Creating a model that will return these outputs given the model input
+activation_model <- keras_model(inputs = model$input, outputs = layer_outputs)
+
+# Running the model in predict mode
+activations <- activation_model %>% predict(img_tensor)
+
+# let's check the first convolution layer. I should be a 298by298 feature map with 16 filters
+dim(activations[[1]])
+
+```
+Next we define a function that will help us visualise the result of each filter in each of the layer activations above.
+
+```{r}
+plot_channel <- function(channel){
+  # rotating the image
+  img = t(apply(channel, 2, rev))
+  
+  image(img, axes = FALSE, asp = 1, col = terrain.colors(12))
+}
+```
+<br><br>
+
+**Visualizing the convolutions and pooling on our first test image**
+
+The output of each filter in each layer is as shown row-wise.
+
+**layer 1:** `r model$layers[[1]]$name`
+
+```{r}
+
+
+{for(i in 1:1){
+ # takes a particular convolution or pooling layer
+layer = activations[[i]]
+
+# taking the layer name
+layer_name = model$layers[[i]]$name
+
+
+# specifies how the subsequent figures will be drawn in an nr-by-nc array
+op = par(mfrow = c(8,16), mai = c(0.05,0,0.07,0))
+
+
+
+# plot.new()
+#title(main = layer_name, adj = 0.5, line = -1) 
+
+for(i in 1 : dim(layer)[4]){
+  plot_channel(layer[1,,,i])
+}
+
+}}
+```
+
+**layer 2:** `r model$layers[[2]]$name`
+
+```{r}
+
+
+{for(i in 2:2){
+ # takes a particular convolution or pooling layer
+layer = activations[[i]]
+
+# taking the layer name
+layer_name = model$layers[[i]]$name
+
+# specifies how the subsequent figures will be drawn in an nr-by-nc array
+op = par(mfrow = c(8,16), mai = c(0.05,0,0.07,0))
+
+for(i in 1 : dim(layer)[4]){
+  plot_channel(layer[1,,,i])
+}
+
+}}
+```
+
+
+
+**layer 3:** `r model$layers[[3]]$name`
+
+```{r}
+
+
+{for(i in 3:3){
+ # takes a particular convolution or pooling layer
+layer = activations[[i]]
+
+# taking the layer name
+layer_name = model$layers[[i]]$name
+
+# specifies how the subsequent figures will be drawn in an nr-by-nc array
+op = par(mfrow = c(8,16), mai = c(0.05,0,0.07,0))
+
+for(i in 1 : dim(layer)[4]){
+  plot_channel(layer[1,,,i])
+}
+
+}}
+```
+
+**layer 4:** `r model$layers[[4]]$name`
+
+```{r}
+
+
+{for(i in 4:4){
+ # takes a particular convolution or pooling layer
+layer = activations[[i]]
+
+# taking the layer name
+layer_name = model$layers[[i]]$name
+
+# specifies how the subsequent figures will be drawn in an nr-by-nc array
+op = par(mfrow = c(8,16), mai = c(0.05,0,0.07,0))
+
+for(i in 1 : dim(layer)[4]){
+  plot_channel(layer[1,,,i])
+}
+
+}}
+```
+
+**layer 5:** `r model$layers[[5]]$name`
+
+```{r}
+
+
+{for(i in 5:5){
+ # takes a particular convolution or pooling layer
+layer = activations[[i]]
+
+# taking the layer name
+layer_name = model$layers[[i]]$name
+
+# specifies how the subsequent figures will be drawn in an nr-by-nc array
+op = par(mfrow = c(8,16), mai = c(0.05,0,0.0,0))
+
+for(i in 1 : dim(layer)[4]){
+  plot_channel(layer[1,,,i])
+}
+
+}}
+```
+
+**layer 6:** `r model$layers[[6]]$name`
+
+```{r}
+
+
+{for(i in 6:6){
+ # takes a particular convolution or pooling layer
+layer = activations[[i]]
+
+# taking the layer name
+layer_name = model$layers[[i]]$name
+
+# specifies how the subsequent figures will be drawn in an nr-by-nc array
+op = par(mfrow = c(8,16), mai = c(0.05,0,0.07,0))
+
+for(i in 1 : dim(layer)[4]){
+  plot_channel(layer[1,,,i])
+}
+
+}}
+```
+
+As the image goes deeper through the network, the outputs of the layers become increasingly abstract and less visually interpretable. The representations downstream start highlighting what the network pays attention to, and they show fewer and fewer features being "activated"; most are set to zero. This is called "sparsity." Representation sparsity is a key feature of deep learning.
+<br><br>
+
+Higher presentations carry increasingly less information about the visual
+contents of the image, and increasingly refined and specific information (eg hoof or muzzle) related to the class of the image.
+<br><br>
+You can think of a convnet (or a deep network in general) as an information distillation pipeline since raw data goes in, it is repeatedly transformed such that irrelevant information is filtered out and we are left with refined and specific information that relates the input to a particular class.
+<br><br>
+Again, we have made it this far 🏆! We went beyond the Fashion MNIST and the MNIST datasets into more real-world images. Hell, we even downloaded images of our own and used them to evaluate the performance of our Neural Network.
+<br><br>
+Maybe what's remaining is to practice what we have learnt by attempting [Exercise 4](Exercise 4 → https://goo.gle/2WbPo5E). The solution is always discussed by Laurence Moroney at the beginning of the next episode.
+<br><br>
+That's all for now.
+Happy Learning!  👩🏽‍💻 👨‍💻 👨🏾‍💻 👩‍💻
+
+
+
+
+
+# **Reference Material**
+
+* Machine Learning Foundations: Ep #5 - [Classifying real-world images](https://www.youtube.com/watch?v=0kYIZE8Gl90&list=PLOU2XLYxmsII9mzQ-Xxug4l2o04JBrkLV&index=1)
+
+* Deep Learning with R by Francois Chollet and J.J.Allaire
+
+* The [R interface to Keras](https://keras.rstudio.com/articles/tutorial_basic_classification.html) website.
+
+* The [Keras API Reference](https://keras.io/api/)
+
+* Lab 5- [Lab5-Using-Convolutions-With-Complex-Images.ipynb](https://colab.research.google.com/github/lmoroney/mlday-tokyo/blob/master/Lab5-Using-Convolutions-With-Complex-Images.ipynb#scrollTo=on_SDWrtZEld) 
+
+* Exercise for this episode-[Exercise 4]( https://goo.gle/2WbPo5E)

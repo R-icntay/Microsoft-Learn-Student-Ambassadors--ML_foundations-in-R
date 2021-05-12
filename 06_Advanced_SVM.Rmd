@@ -1,0 +1,352 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+### **Advanced Support Vector Machines**
+
+Support vector machines (SVMs) let us predict categories. In this exercise, we will be using SVM, paying attention to the key steps as we go: formatting data correctly, splitting the data into training and test sets, training an SVM model using the training set, and then evaluating and visualising the SVM model using the test set.
+
+We will be looking at prions: misfolded proteins that are associated with several fatal neurodegenerative diseases (kind of like Daleks, if you have seen Doctor Who). Looking at examples of protein mass and weight, we will build a predictive model to detect prions in blood samples.
+
+```{r}
+## loading up the required packages
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(plotly)
+  library(e1071)
+  library(magrittr)
+})
+```
+
+Let's then proceed with a little sanity check on our data
+
+```{r}
+library(readxl)
+PrionData <- read.csv("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/Data/PrionData.csv")
+View(PrionData)
+glimpse(PrionData)
+## 4 columns and 485 observations. The prion_status is a factor representing categorical data. Then there's this X column that contains the row number. By default, R has labelled the column X because the input didn't have a column name (it was blank). This behaviour happens regularly when exporting data sets from a program like Microsoft Excel and then importing them into R. Let's get rid of it.
+
+
+## Method 1
+
+#PrionData_1=PrionData %>% select(-X)
+#View(PrionData_1)
+
+## Method 2 using magrittr compound assignment pipe-operator %<>% {magrittr}
+
+PrionData%<>%select(-X)
+View(PrionData)
+
+
+# PrionData%<>%select(-X) is the same as : PrionData_1=PrionData %>% select(-X)
+
+##  The magrittr assignment symbol %<>% is a combination of the magrittr pipe symbol %>% and the base R assignment symbol <-. It takes the variable on the left hand side of the %<>% symbol, and updates the value of the variable with the result of the right hand side. So the object on the left hand side acts as both the initial value and the resulting value.
+
+# Check frequency of `prion_status` in `prion_data`
+
+# the unorthodox way could be:
+table(PrionData$prion_status)*100/nrow(PrionData)
+
+## using the tidyverse, a much tidier way
+PrionData %>% 
+  group_by(prion_status) %>% 
+  summarise(n=dplyr::n()) %>% 
+  mutate(freq=n*100/sum(n))
+
+## n()--->The number of observations in the current group. Works within a group_by
+
+##mass is the first feature;
+#weight is the second feature;
+#prion_status is the label (or category).
+#Of the 485 observations, 375 (77.31%) are non-prions, and 110 (22.68%) are prions.
+```
+
+
+
+### **Step 2**
+
+Let's do some EDA. Let's graph prion_data to better understand the features and labels.
+
+```{r}
+###
+prion_plot=PrionData %>% 
+  ggplot(mapping=aes(x=mass,y=weight))+
+  geom_point(aes(color=prion_status))+
+  labs(
+    x="Mass",
+    y="Weight",
+    color="Prion status"
+  )+
+  ggtitle("Classification plot for prion data")+
+  theme(plot.title = element_text(hjust=0.5))
+
+## let's add some interactivity with plotly
+
+ggplotly(prion_plot)
+```
+
+
+
+### **Step 3**
+
+To create a SVM model, let's split our data into training and test sets. We'll start by checking the total number of instances in our data set.
+
+```{r}
+glimpse(PrionData)
+## we have 485 observations and 3 variables. So, let's use 400 examples for our training set, and the remainder for our test set.
+
+#We will use the slice function to select the first 400 rows from prion_data
+
+train_prion=PrionData %>% slice(1:400)
+
+## again, let's see the composition of the prion_status column
+
+train_prion %>% 
+  group_by(prion_status) %>% 
+  summarise(n=n()) %>% 
+  mutate(freq=n*100/sum(n))
+
+## creating a test set with the remaining rows
+test_prion=PrionData %>% slice(401:nrow(PrionData))
+
+test_prion %>% 
+  group_by(prion_status) %>% 
+  summarise(n=n()) %>% 
+  mutate(freq=n*100/sum(n))
+
+### let's see a summary of our datasets
+summary(train_prion)
+summary(test_prion)
+
+```
+
+
+### **Step 4**
+
+Alright, now to make a support vector machine.
+
+```
+Below we will make an SVM similar to the previous exercise. Remember the syntax for SVMs using the e1071::svm function:
+
+svm_model <- svm(x = x, y = y, data = dataset)
+
+where x represents the features (a matrix), and y represents the labels (factors).
+
+Alternatively, we can use the following syntax for the svm function:
+
+model <- svm(formula = y ~ x, data = dataset)
+
+where y represents the labels/categories, and x represents the features. Note if you have multiple x features in the dataset, you can simply type . in the formula argument to refer to everything in the data set except the y argument. Let's try out this syntax using the training data as our input.
+```
+
+```{r}
+SVM_Model=svm(formula=prion_status~.,data=train_prion)
+## this is the same as SVM_Model=svm(formula=prion_status~mass+weight,data=train_prion)
+
+## Great! We've made a SVM model using our training set train_prion.
+```
+
+Step 5
+Let's create some custom functions to graph and evaluate SVM models.
+
+
+
+```{r}
+# Create a custom function named `Graph_SVM` to plot an SVM model
+theme_set(theme_light())
+graph_svm= function(model,data_set){
+  grid <- expand.grid(mass = seq(min(data_set$mass), max(data_set$mass), length.out = 100),
+                        weight = seq(min(data_set$weight), max(data_set$weight), length.out = 100))
+  
+ preds <- predict(model, grid)
+    #df <<- data.frame(grid, preds)
+  
+  df<-data.frame(grid,preds) ## <<- allows the dataframe to be stored in the environment whenever the function is run
+  
+  
+  ggplot()+
+    geom_tile(data=df,aes(x=mass,y=weight,fill=preds))+
+    geom_point(data=data_set,aes(x=mass,y=weight,color=prion_status,shape=prion_status),alpha=0.75)+
+    
+    scale_color_manual(values = c("grey10","grey50"))+
+    labs(title = paste("SVM model prediction"), x = "Mass", y = "Weight",
+         fill = "Prediction", shape = "Prion status", colour = "Prion status") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+}
+```
+
+
+```{r}
+# Create another custom function named `Evaluate_SVM` to evaluate the SVM model, print results to screen,
+# and run the `Graph_SVM` custom function
+
+evaluate_svm=function(model,data_set){
+  print("SVM Model Evaluation",quote = F)
+  print(paste0("Dataset: ", deparse(substitute(data_set))),quote=F)
+  mod_dset=data_set
+  mod_dset$predictions=predict(model,data_set)
+  mod_dset=as.data.frame(mod_dset)
+ mod_dset <<- mod_dset
+  # total=0
+  # 
+  # for (i in 1:nrow(data_set)) {
+  #   if(toString(predictions)==data_set[i,"prion_status"]){
+  #     tottal=total+1
+  #   }
+  # }
+  # 
+  # print results to screen
+  
+  
+    print(paste0("Model name: ", deparse(substitute(model))),quote=F)
+    #print(paste0("Dataset: ", deparse(substitute(data_set))))
+    print(paste0("Accuracy: ", mean(mod_dset$predictions==mod_dset$prion_status)*100, "%"),quote=F)
+    print(paste0("Number of samples: ", nrow(data_set)),quote=F)
+  
+  # Call our custom function for graphing SVM model
+  theme_set(theme_light())
+  graph_svm(model,data_set)
+  
+  
+  
+}
+```
+
+
+
+<!-- ```{r} -->
+<!-- Evaluate_SVM <- function(model, data_set){ -->
+<!--     predictions <- predict(model, data_set) -->
+
+<!--     total <- 0 -->
+<!--     for(i in 1:nrow(data_set)){ -->
+<!--     if(toString(predictions[i]) == data_set[i, "prion_status"]){ -->
+<!--         total = total + 1 -->
+<!--         } -->
+<!--         } -->
+<!--     # Print results to screen -->
+<!--     print("SVM Model Evaluation") -->
+<!--     print(paste0("Model name: ", deparse(substitute(model)))) -->
+<!--     print(paste0("Dataset: ", deparse(substitute(data_set)))) -->
+<!--     print(paste0("Accuracy: ", total/nrow(data_set)*100, "%")) -->
+<!--     print(paste0("Number of samples: ", nrow(data_set))) -->
+
+<!--     # Call our custom function for graphing SVM model -->
+<!--     Graph_SVM(model, data_set) -->
+<!-- } -->
+
+<!-- print("Custom function ready!") -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- Evaluate_SVM(SVM_Model,train_prion) -->
+<!-- Evaluate_SVM(SVM_Model_sigmoid,test_prion) -->
+
+<!-- ``` -->
+
+
+
+Excellent! Now that we have created the custom function `Evaluate_SVM` (which incorporates the `Graph_SVM` function) let's evaluate our SVM model on the training data. 
+
+```{r}
+evaluate_svm(SVM_Model,train_prion)
+```
+
+Step 6
+
+The SVM has performed reasonably well separating our training data set into two. Now let's take a look at our test set.
+
+```{r}
+evaluate_svm(SVM_Model,test_prion)
+```
+
+That's a good result.
+
+Conclusion
+Well done! We've taken a data set, tidied it, prepared it into training and test sets, created an SVM based on the training set, and evaluated the SVM model using the test set.
+
+
+<!-- ```{r} -->
+<!-- Graph_SVM <- function(model, data_set){ -->
+<!--     grid <- expand.grid("mass" = seq(min(data_set$mass), max(data_set$mass), length.out = 100), -->
+<!--                         "weight" = seq(min(data_set$weight), max(data_set$weight), length.out = 100)) -->
+<!--     preds <- predict(model, grid) -->
+<!--     df <- data.frame(grid, preds) -->
+
+<!--     ggplot() + -->
+<!--     geom_tile(data = df, aes(x = mass, y = weight, fill = preds)) + -->
+<!--     geom_point(data = data_set, aes(x = mass, y = weight, shape = prion_status, -->
+<!--                                     colour = prion_status), -->
+<!--                alpha = 0.75) + -->
+<!--     scale_colour_manual(values = c("grey10", "grey50")) + -->
+<!--     labs(title = paste("SVM model prediction"), x = "Mass", y = "Weight", -->
+<!--          fill = "Prediction", shape = "Prion status", colour = "Prion status") + -->
+<!--     theme(plot.title = element_text(hjust = 0.5)) -->
+<!--     } -->
+<!-- ``` -->
+
+
+
+
+OPTIONAL: Step 8
+Want to have a play around with different kernels for your SVM models? It's really easy!
+
+The standard kernel is a radial basis kernel. But there's a few more you can choose from: linear, polynomial, and sigmoid. Let's try them out.
+
+If you want to use a linear kernel, all you need to do is add kernel = "linear" to your model. Like this:
+
+SVM_Model <- svm(formula = y ~ x, data = dataset, kernel = "linear")
+
+Give it a go with all the different kernels below. T
+
+
+
+```{r}
+SVM_Model_linear=svm(formula=prion_status~.,data=train_prion,kernel="linear")
+##Now we have created the linear SVM model, let's evaluate it on our training and test sets using our custom function we created earlier, Evaluate_SVM. Remember the inputs to Evaluate_SVM are the SVM model followed by the data you wish to evaluate the model on.
+
+evaluate_svm(model = SVM_Model_linear,data_set = train_prion)
+
+evaluate_svm(model = SVM_Model_linear,data_set = test_prion)
+
+## You can see the hyperplane is a linear line! Compare the linear SVM model results to the radial SVM model results to see the difference for yourself!
+```
+Now let's try a sigmoid kernel.
+
+```{r}
+SVM_Model_sigmoid= svm(formula=prion_status~.,data=train_prion,kernel="sigmoid")
+
+# Evaluate sigmoid SVM model on training set
+evaluate_svm(SVM_Model_sigmoid,train_prion)
+
+# Evaluate sigmoid SVM model on test set
+evaluate_svm(SVM_Model_sigmoid,test_prion)
+```
+
+
+Now let's try a polynomial kernel.
+
+```{r}
+SVM_Model_poly= svm(formula=prion_status~.,data=train_prion,kernel="polynomial")
+
+# Evaluate sigmoid SVM model on training set
+evaluate_svm(SVM_Model_poly,train_prion)
+
+# Evaluate sigmoid SVM model on test set
+evaluate_svm(SVM_Model_poly,test_prion)
+
+```
+
+If we were to carry on analysing prions like this, a polynomial SVM looks like a good choice (based on the performance of the different models on test_prion). If the data set was more complicated, we could try different degrees for the polynomial to see which one was the most accurate. This is part of tuning a model.
+

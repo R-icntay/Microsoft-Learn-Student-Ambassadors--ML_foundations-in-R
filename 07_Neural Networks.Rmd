@@ -1,0 +1,332 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+Originally hypothesised in the 1940s, neural networks are now one of the main tools used in modern AI. Neural networks can be used for both regression and categorisation applications. Recent advances with storage, processing power, and open-source tools have allowed many successful applications of neural networks in medical diagnosis, filtering explicit content, speech recognition, and machine translation.
+
+In this exercise we will compare three dog breeds using their age, weight, and height. We will make a neural network model to classify the breeds of dogs based on these features.
+
+Note: It's extremely common for AI practitioners to use a template such as the one below for making neural networks quickly. After you are done, feel free to play around with the template to get a feel of how you can easily adjust a neural network to your problems using the package keras.
+
+Let's start by loading the libraries required for this session.
+
+We'll be requiring the Tidyverse and Keras package for this. You can have the installed as follows
+
+```
+suppressMessages(install.packages("tidyverse"))
+suppressMessages(install.packages("keras"))
+suppressMessages(install_keras())
+
+Ps: it could take a while
+```
+
+Step 1
+Now let's load our data and inspect it.
+
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(keras)
+  library(readxl)
+  library(plotly)
+})
+
+
+```
+
+```{r}
+ dog_data <- read.csv("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/Data/dog_data.csv")
+
+View(dog_data)
+glimpse(dog_data)
+summary(dog_data)
+
+table(dog_data$breed)
+```
+
+Based on the output of glimpse(dog_data), we have 200 observations on dogs stored in 4 variables:
+
+*age: the first feature;
+*weight: the second feature;
+*height: the third feature;
+*breed: the label, represented as numbers 0, 1, and 2.
+
+
+Step 2
+Before we make our model, let's get our training and test sets ready.
+
+We've got 200 observations on dogs, so we'll use the first 160 observations for the training set, and the last 40 observations for our test set. For both the training and test sets, we will also separate X the features (age, weight and height) from Y the label (breed).
+
+
+
+```{r}
+# let's create our training set and split the features from the labels
+
+train_X = as.matrix(dog_data[1:160,1:3]) # Rows 1 - 160, columns 1 - 3 (the features)
+
+raw_train_y = as.matrix(dog_data[1:160,4]) # Rows 1 - 160, column 4 (the label)
+
+# let's create the test set and split the features from the labels
+
+test_X = as.matrix(dog_data[161:200,1:3]) # Rows 161 - 200, columns 1 - 3 (the features)
+
+
+raw_test_y = as.matrix(dog_data[161:200,4]) # Rows 161 - 200, column 4 (the label)
+
+# Check first few lines of new variables to see if the output is what we expect
+
+# Training data
+head(train_X)
+head(raw_train_y)
+
+# Test data
+head(test_X)
+head(raw_test_y)
+```
+
+For a neural network, indicating breed using 0, 1, and 2 are misleading, as it might imply that breed 0 is closer to breed 1 than breed 2. But that is not the case here.
+
+To allow the neural network to predict categories properly, we represent categories as 'one-hot vectors'. The labels (dog breeds) will go from being represented as 0, 1, and 2 to this:
+
+
+```{r,echo=FALSE,fig.align='center'}
+library(knitr)
+include_graphics("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/aRduino/r4g/onehot.JPG")
+```
+So if the 1 is in the first position, the neural network knows that it's breed 0.
+
+If the 1 is in the second position, the neural network knows that it's breed 1, and so on.
+
+
+```{r}
+# This box uses the keras function to_categorical to change our labels breed (our raw train y and raw test x) rom integer to categorical
+
+# converting our training labels
+train_Y = to_categorical(raw_train_y,num_classes = 3)
+
+# converting our test labels
+
+test_Y = to_categorical(raw_test_y, num_classes = 3)
+
+head(train_Y)
+head(test_Y)
+
+```
+
+
+Step 4
+That's our data ready. Now it's time to make your first neural network model!
+
+This is the standard syntax for a model using the keras package. You can always play around with adding in extra hidden layers and changing their size and activation functions later.
+
+Our input shape in the first dense layer is the number of features used to predict the breed, which is 3 in this case (age, weight, height).
+
+Our final layer has 3 units (nodes), one for each of the dog breeds. So if we had 5 different breeds of dog in our dataset, the final layer would have 5 units.
+
+
+```{r}
+use_session_with_seed(5)
+set.seed(5)
+
+## keras_model_sequential {keras}	creates a Keras Model composed of a linear stack of layers
+
+# Defining a model: https://keras.rstudio.com/articles/sequential_model.html
+
+model = keras_model_sequential()
+
+model %>% 
+  # add a densely connected neural network layer using `layer_dense` function
+  # our first layer has an input shape of 3 to represent the 3 features age, weight and height
+  layer_dense(units = 10, input_shape = 3,activation = "relu") %>%
+  # We now have a hidden layer with 10 nodes, with an input shape of 3 representing our 3 features.
+  #layer_activation("relu") %>% 
+  
+  # next we'll add another layer consisting of ten nodes
+  
+  layer_dense(units = 10,activation = "relu") %>% 
+  
+  #layer_activation("relu") %>% 
+  
+  # Uncomment the next line if you want to add another layer
+# layer_dense(units = 10, activation = "relu") %>% 
+  
+  # final layer has 3 nodes, each for the dog breed
+  
+  layer_dense(units = 3,activation = "softmax")
+
+model %>% summary()
+  
+  
+# The model needs to know what input shape it should expect. For this reason, the first layer in a sequential model (and only the first, because following layers can do automatic shape inference) needs to receive information about its input shape.
+
+# https://www.analyticsvidhya.com/blog/2020/01/fundamentals-deep-learning-activation-functions-when-to-use-them/
+
+# https://missinglink.ai/guides/neural-network-concepts/7-types-neural-network-activation-functions-right/
+```
+```
+Alright, that's our first model ready.
+
+N.B. "tanh" is another common activation function that, if you want, you can try instead of "relu", but it doesn't perform very well here.
+
+Feel free to experiment with some different parameters later on. If this doesn't work, check that you have the correct size for the input and output layers in Step 4 (must be 3 nodes each). For example, "tanh" is another popular activation function if you want to try it instead of "relu".
+```
+
+
+Step 5
+
+To control something, first you need to be able to observe it. To control the output of a neural network, you need to be able to measure how far this output is from what you expected. This is the job of the of the network, also called the loss function objective function. The loss function takes the predictions of the network and the true target (what you wanted the network to output) and computes a distance score, capturing how well the network has done on this specific example.
+
+The fundamental trick in deep learning is to use this score as a feedback signal to adjust the value of the weights a little, in a direction that will lower the loss score for the current example. This adjustment is the job of the , which optimizer implements what’s called the algorithm: the central algorithm in deep backpropagation learning. 
+
+
+```{r,echo=FALSE,fig.align='center'}
+library(knitr)
+include_graphics("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/aRduino/r4g/neural.JPG")
+```
+
+Next, we'll compile the model for training and see how it runs.
+
+There are a few parameters you can choose that change how the model trains, and end up changing how the model performs.
+
+We will use some standard parameters for now.
+
+Feel free to experiment with some different parameters later on. If this doesn't work, check that you input the correct size for the input and output layers in Step 4 (must have 3 nodes each).
+
+
+To make the network ready for training, we need to pick three more things, as part of the step: compilation
+*A loss function—How the network will be able to measure how good a job it’s doing on its training data, and thus how it will be able to steer itself in the right direction.
+
+
+*An optimizer—The mechanism through which the network will update itself based on the data it sees and its loss function.
+
+
+*Metrics to monitor during training and testing—Here we’ll only care about accuracy
+
+
+
+
+```{r}
+model %>% compile(
+  optimizer = optimizer_adagrad(),
+  loss = "categorical_crossentropy",
+  metrics = "accuracy"
+)
+
+# N.B. "adam" is another popular optimizer if you want to try it instead of "adagrad".
+```
+
+Let's train the neural network and plot it! For training a model, you will typically use the fit() function. The training loop is as:
+* Draw a batch of training samples and corresponding targets . x y
+* Run the network on x (called a x forward pass) to obtain predictions y_pred
+* Compute the loss of the network on the batch, a measure of the mismatch between y_pred and y
+* Update all weights of the network in a way that slightly reduces the loss on this batch.
+* Do this for all epochs
+
+```{r}
+# fit() Trains the model for a fixed number of epochs (iterations on a dataset). The model is not trained for a number of iterations given by epochs, but merely until the epoch of index epochs is reached.
+
+history = model %>% fit(
+  x=train_X,
+  y=train_Y,
+  
+  shuffle=TRUE,
+  
+  # Number of samples per gradient update.
+  
+  batch_size=2,
+  
+  # epochs : Number of epochs to train the model
+  
+  epochs=10,
+  
+  validation_split=0.2
+)
+
+plot(history)
+
+# This tells us how the model performed on the training set
+
+history
+
+# Note that the original training set train_X and train_Y with 160 observations has been split up again during the training process, where 128 of 160 samples were used for training, and 32 samples were used for validation, as per the output from history.
+
+# Validation sets is a portion of the data used along the training set during training to detect overfitting and all.
+```
+
+Trained on 128 samples (batch_size=2, epochs=10)
+Final epoch (plot to see history):
+    loss: 0.6261
+     acc: 0.8984
+val_loss: 0.6126
+ val_acc: 0.9688 
+
+
+Step 6
+Now that our model is trained and ready, let's see how it performs on our test data, test_X and test_Y!
+
+It's important to test a model on data that it has never seen before, to make sure it doesn't overfit. Now let's evaluate it against the test set.
+
+
+```{r}
+metrics = model %>% evaluate(test_X,test_Y)
+print(metrics)
+
+# not bad, an accuracy of 92.5% wth this seed.
+```
+
+Let's see how the model predicts something completely new and unclassified.
+
+```{r}
+# let's start with creating a new instance of dog_data
+
+new_dog_data=tibble(
+  age=5,
+  weight=4,
+  height=8
+)
+
+# next let plot the relationship between age, height and breed
+
+dog_fig = ggplot()+
+  geom_point(data=dog_data,mapping=aes(x=age,y=height,color=as.factor(breed)))+
+  geom_point(data=new_dog_data,aes(x=age,y=height),shape="+",size=10)+
+  labs(x="Age",y="Height",color="breed")
+
+ggplotly(dog_fig)
+```
+
+
+Now let's see what breed of dog the model says it is!
+
+
+```{r}
+prediction = function(model,data){
+  # Generates probability
+  #x=print(paste("The probabilities of the classes are: "),quote = F)
+ prob = predict_proba(model,as.matrix(data))
+  
+  # Generates class probability predictions for the input samples
+  
+ # y=print(paste("Predicted class: "),quote=F)
+ class = predict_classes(model,as.matrix(data))
+  
+  out_p=list(prob,class)
+  
+  return(out_p)
+}
+
+prediction(model = model,data=new_dog_data)
+
+# The final number tells us which class it thinks it is.
+```
+
+Conclusion
+We've built a simple neural network to help us predict dog breeds.
+
+If you want to play around with this neural network and a new data set, just remember to set your input and output sizes correctly.

@@ -1,0 +1,114 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+        Microsoft Machine Learning Crash Course
+        Exercise - Simple linear regression
+We’ll try out simple linear regression in Azure Notebooks - predicting customer satisfaction with different chocolate bar recipes.
+
+In this exercise, we want to know how to make our chocolate-bar customers happier. To do this, we need to know whether chocolate bar features can predict customer happiness. For example, customers may be happier when chocolate bars are bigger, or when they contain more cocoa.
+
+We have data on customer happiness when eating chocolate bars with different features. Let's explore the relationship between customer happiness and the different features we have available.
+```{r}
+suppressPackageStartupMessages({library(tidyverse)})
+
+## loading the chocolate data and save it to a variable name 'choc_dat'
+
+chocolate.data <- read.delim("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/Data/chocolate data.txt")
+choc_data=chocolate.data
+View(choc_data)
+
+## check the structure of data
+
+str(choc_data) ## we have 100 rows and 5 columns
+glimpse(choc_data) ## this does the same thing too
+
+## to view our column names
+
+names(choc_data)
+
+## Our object choc_data contains 100 different chocolate bar observations for 5 variables: weight, cocoa percent, sugar percent, milk percent, and customer happiness.
+
+# Inspect the start of the data set
+
+head(choc_data) ## this shows the first 6 rows of the data set
+
+tail(choc_data,n=10) ## this shows the last 10 rows by modifying the n.
+```
+
+Step 2
+We want to know which chocolate bar features make customers happy.
+
+The example below shows a linear regression between cocoa percentage and customer happiness.
+
+```{r}
+## Simple linear regression is when we use one feature (x) to predict a label y. We'll Create our own function to generate a linear regression model then graph the result. The function takes in x and y as character variables enclosed in quotations just like the result of : names(choc_data)
+
+lin_reg_choc=function(x,y,my_data){
+  
+  ## these two x_arg and y_arg create a data frame equivalent to my_data, then they substitute everything with the components of column called x and y to obtain numeric values to be used in finding a linear regression model
+  
+  x_arg=my_data[ ,substitute(x)]
+  y_arg=my_data[ ,substitute(y)]
+  
+  ## perform linear regression. ## let's now use the lm function. Before embarking on more complex machine learning models, it’s a good idea to build the simplest possible model to get an idea of what is going on. In this case, that means fitting a simple linear model using base R’s lm() function.We are tasked with predicting y(customer satisfaction) given feature x
+  
+  lm_choc=lm(y_arg~x_arg,data=my_data)
+  
+  lm_summary=summary(lm_choc)
+  
+  
+
+my_plot=my_data %>% ggplot(mapping=aes_string(x=x,y=y))+
+  ## used to aes()?In this case,we'll use aes_string since the inputs are quoted "" 
+    geom_point(colour="blue",size=1.5)+
+    ## add line based on linear model
+    geom_abline(intercept = lm_choc$coefficients[1],
+                slope=lm_choc$coefficients[2],
+                colour="black",lty=1)+
+    ## use ?xlab
+    ## y-axis remains(customer happiness) constant since we want to see how each variable eg weight,milk percent etc relates to it
+    
+    ylab("Customer happiness")+
+    
+    ## x-axis label; use 'gsub' function to remove underscore from the column label. Similar to strrep command in MATLAB
+    xlab(gsub("_"," ",x))+
+    ## graph title. Paste-Concatenate vectors after converting to character.
+    ggtitle(paste("Customer satisfaction with chocolate bars given",gsub("_"," ",x)))+
+    theme(plot.title=element_text(hjust=0.5))+geom_smooth(se=FALSE,method = 'lm',colour="orange",alpha=0.5)
+                                                          
+                                                          
+## In R programming, functions do not return multiple values, however, there's a workaround, you can create a list with the outputs you want and return them.
+
+return(list(lm_summary,my_plot))
+
+}
+```
+
+Now that we have created quite a robust function, let's test out various features and compare how they predict the customer satisfaction.
+
+```{r}
+lin_reg_choc(x="sugar_percent",y="customer_happiness",my_data = choc_data)
+par(new=TRUE)
+lin_reg_choc(x="milk_percent",y="customer_happiness",my_data = choc_data)
+lin_reg_choc(x="cocoa_percent",y="customer_happiness",my_data = choc_data)
+lin_reg_choc(x="weight",y="customer_happiness",my_data = choc_data)
+
+
+```
+
+
+It looks like heavier chocolate bars make customers happier, whereas larger amounts of sugar or milk don't seem to make customers happier.
+
+We can draw this conclusion based on the slope of our linear regression models :
+
+Our linear regression model for "weight vs. customer happiness" reveals that as chocolate bar weight increases, customer happiness also increases;
+Our linear regression models for "sugar percent vs. customer happiness" and "milk percent vs. customer happiness" reveal that as the percentage of sugar or milk increases, customer happiness decreases.
+
+How did we rule out cocoa percent? Good question. We used the R squared value. R-squared is a goodness-of-fit measure for linear regression models. It is quite low for cocoa percent signifying the level of correlation between the two variables are quite low
+
+Well done! We have run a simple linear regression that revealed chocolate bars heavier in weight and with higher percentages of cocoa make customers happy.

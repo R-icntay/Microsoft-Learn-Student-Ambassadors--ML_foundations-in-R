@@ -1,0 +1,280 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+
+Sometimes our data doesn't have a linear relationship, but we still want to predict an outcome. However polynomial regression can help us make predictions for more complex non-linear relationships.
+
+
+For polynomial regression, we will look at a dataset analysing internet traffic over the course of the day. Observations were made every hour, on the hour, over the course of several days. Suppose we want to predict the level of internet traffic we might see at any time during the day, how might we do this?
+
+Let's begin by the normal sanity check.
+
+```{r}
+# incase you don't have these packages
+#install.packages(c('tidyverse','plotly'))
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(plotly)
+})
+##plotly is not compulsory. It's just a package similar to ggplot2.
+library(readxl)
+int_traf<- read.csv("C:/Users/ADMIN/Desktop/Intoduction to Python for data science/R for data science/Data/traffic_by_hour.csv",check.names = FALSE)
+# Invoke a spreadsheet-style data viewer on a matrix-like R object.
+View(int_traf)
+str(int_traf)
+anyNA(int_traf)
+## okay,strange,right? we have 6 rows and 24 columns. This is not the normal format we are used to.  Currently, our data is stored in "wide" format, with one feature, i.e. the hour, spread across multiple columns.
+```
+we can observe that we have the following variables:
+
+Hour 00 - 23, spread across the columns;
+Observation 1 - 6, with each observation(day) representing one row;
+Traffic (in units Gbps), representing the values of each observation made every hour.
+
+
+```
+we need to reshape the data using the package tidyr gather function so we can plot our data using ggplot2. The ggplot2 functions expect our data input to be in "long" format, i.e. a column for each feature name, and a row for each observation.
+We need to reshape the data so that our variables, Hour, Observation, and Traffic are the column names.
+```
+
+
+```{r}
+## reshaping our data using tidyr's gather function. Gather takes multiple columns and collapses into key-value pairs.
+
+traffic_by_hour_tall=int_traf %>% 
+  gather(key="Hour",value = "Traffic") %>% 
+  mutate(Observation=as.factor(rep(1:6,24))) %>% 
+  mutate_if(is.character,as.integer) %>% glimpse()
+
+head(traffic_by_hour_tall,n=8)
+```
+
+
+```{r}
+## Compare the structural difference between traf_by_hr_long and int_traf for yourself, particularly the dimensions (rows&columns)
+## now we can easily utilise our most truly ggplot or plotly
+theme_set(theme_light())
+fig=traffic_by_hour_tall %>% ggplot(mapping = aes(x=Hour,y=Traffic))+
+  geom_line(aes(colour=Observation,linetype=Observation))+
+  xlab("Hour of the day(24 hour time)")+
+  ylab("Internet traffic (Gbps)")+
+  ggtitle("Internet traffic for each hour of the day")+
+  theme(plot.title = element_text(hjust = 0.5))
+ggplotly(fig)
+```
+
+
+```{r}
+## plot produced by plot_ly package
+fig=traffic_by_hour_tall %>% plot_ly(x=~Hour,
+                                 y=~Traffic,
+                                 type="scatter",
+                                 mode="lines",
+                                # frame=~Observation,
+                                 color = ~Observation,
+                                ##line = list(simplyfy = F)
+                                 linetype = ~Observation) %>% layout(
+title="Internet traffic for each hour of the day",
+xaxis=list(title="Hour of the day(24 hour time)",zeroline=F),
+yaxis=list(title="Internet traffic(Gbps)",zeroline=F)
+                                 ) %>% 
+  animation_opts(
+    frame = 5000,
+    transition = 4000
+  ) 
+fig
+
+
+
+
+```
+
+This plot looks a bit busy due to overplotting. We should summarize the data to help us visualize trends. Overplotting describes situations, in which multiple data points overlay each other within a plot, causing the individual observations to be non-distinguishable.
+
+
+
+```
+Let's see if we can visualize a clearer pattern by taking the average values for each hour.
+```
+
+```{r}
+## group_by() takes an existing tbl and converts it into a grouped tbl where operations are performed "by group". It simply groups the rows depending on what you have specified in the columns. By itself, group_by() doesn’t do much...ooops ..sorry. However, when you apply a dplyr function like summarise() to grouped data, dplyr will execute the function in a groupwise manner.
+
+m_traffic_by_hour_tall=traffic_by_hour_tall %>% 
+ group_by(Hour) %>% 
+  mutate(Traffic_mean=mean(Traffic)) %>% ungroup() %>% as.data.frame() %>% glimpse()
+
+## this can be illustrated by dplyr's grammar: filter,select,summarize
+head(m_traffic_by_hour_tall,n=10)
+
+
+## let's now plot this out
+
+fig_traf=m_traffic_by_hour_tall %>% ggplot(mapping = aes(x=Hour, y=Traffic_mean))+
+  ## plotting the average values as points
+  geom_point()+
+  ##plotting each day's traffic as a line
+  #geom_line(mapping=aes(x=Hour,y=Traffic,colour=Observation,linetype=Observation))+
+  xlab("Hour of the day(24 hour time)")+
+  ylab("Internet traffic(Gbps)")+
+  ggtitle("Internet traffic for each hour of the day")+
+  theme(plot.title = element_text(hjust=0.5))
+
+ggplotly(fig_traf)
+
+# great! The plot above shows the average value for each hour as points (black), together with observations 1 - 6 as lines.
+```
+
+
+```{r}
+# We can also plot our data using a graph type that summarizes the data for us, such as a box plot. It visualises five summary statistics (the median, two hinges and two whiskers), and all "outlying" points individually.
+
+fig_box=traffic_by_hour_tall %>% ggplot()+
+  geom_boxplot(mapping = aes(x=Hour,y=Traffic,group=Hour))+
+  ggtitle("Internet traffic for each hour of the day")+
+  xlab("Hour of the day(24 hour time)")+
+  ylab("Internet traffic(Gbps)")+
+  theme(plot.title = element_text(hjust = 0.5))
+  
+
+ggplotly(fig_box)
+
+##traffic_by_hour_tall %>% filter(Hour==0) %>% select(Traffic) %>% mutate(sort(Traffic))
+## This summarization of the data could help us make a prediction if we wanted to know the expected traffic exactly on the hour.
+
+#But, we'll need to be a bit clever if we want to make a good prediction of times in between.
+```
+
+
+
+
+
+```
+Let's use the midpoints in between the hours to help us analyse the relationship between the time of day and the amount of internet traffic.
+
+The lm (linear model) function together with the poly (polynomial) function allow us to do just this. We need to specify a feature  𝑥  (time of day), our outcome  𝑦  (the amount of internet traffic), and the  𝑑𝑒𝑔𝑟𝑒𝑒  of the polynomial (how curvy the line is).
+
+
+
+One can use the lm function directly like in the previous exercises, but for this exercise we will use lm indirectly through ggplot2.
+
+First we will test polynomial functions with degrees 1, 2, 3 and 4.
+
+
+we are looking for a generalization of the relationship between time of day and internet traffic and not a model that exactly fits the data
+```
+
+```{r}
+fig_poly= m_traffic_by_hour_tall %>% ggplot(mapping = aes(x=Hour,y=Traffic_mean)) +
+  geom_point(alpha=0.5,color="black")+
+  geom_smooth(method=lm,formula = y~poly(x,degree = 1),colour="gray",linetype="dashed",se=FALSE)+
+  
+  ## let's try out other degrees of the polynomial;To increase interactivity, I assigned the aesthetic color to Observation. This is of course a dummy trick since we performed a mean calculation of all the 6 values of each hour. Hence, the value of Traffic mean for a given hour is the same in all days(Observation). I hope you can find better ways to do this :-)
+  
+  geom_smooth(method = lm,formula = y~poly(x,degree = 2),se=FALSE,aes(color=Observation[1]))+
+  
+  geom_smooth(method=lm,formula = y~poly(x,degree = 3),se=FALSE,aes(color=Observation[2]))+
+  
+  #geom_smooth(method=lm,formula = y~poly(x,degree = 4),se=FALSE,color="blue") +
+  geom_smooth(method=lm,formula = y~poly(x,degree = 5),se=FALSE,aes(color=Observation[3])) +
+  
+  geom_smooth(method=lm,formula = y~poly(x,degree = 6),se=FALSE,aes(color=Observation[4]))+
+  
+  geom_smooth(method=lm,formula = y~poly(x,degree = 7),se=FALSE,aes(color=Observation[5]))+
+  
+  xlab("Hour of the day (24 hour time)") +
+ylab("Internet traffic (Gbps)") +
+ggtitle("Testing fit of polynomial functions (degrees 1 - 7) to internet traffic data") +
+  theme(plot.title = element_text(hjust=0.6))
+
+
+
+ggplotly(fig_poly)
+ 
+```
+
+
+
+```
+None of the polynomial functions(1 to 5) did a great job of generalising the data. It looks like the 6th and 7th degree polynomials have an identical curve, so either of these polynomials will be a good model to use.
+
+We could use an even higher degree polynomial to fit the model to our data even more tightly, but we don't want to overfit the curve, since we just want a generalization of the relationship between time of day and internet traffic.
+```
+
+Let's see how our 6th degree polynomial alone compares to the real data.
+
+```{r}
+fig_poly6=m_traffic_by_hour_tall %>% ggplot(mapping=aes(x=Hour,y=Traffic))+
+  ## we describe how we want our lines to appear using the aesthetics color and linetype under geom_line
+  geom_line(alpha=0.5,aes(linetype=Observation,color=Observation))+
+  geom_smooth(method=lm,formula = y~poly(x,degree = 6),colour="Black",se=FALSE)+
+ xlab("Hour of the day (24 hour time)") +
+ylab("Internet traffic (Gbps)") +
+  ggtitle("Testing fit of 6th degree polynomial to internet traffic data") +
+theme(plot.title = element_text(hjust = 0.5))
+ggplotly(fig_poly6)
+
+## Couldnt have asked for a better generalisation of the relationship between time and internet traffic
+```
+
+
+
+Now let's try using this polynomial regression model to make a prediction for how much internet traffic there will be at a certain time of day. Let's choose the time 12:30pm.
+
+
+
+```{r}
+## let's save our 6th degree polynomial model
+
+lm_poly_6th <- lm(Traffic~poly(Hour,degree = 6),data=traffic_by_hour_tall)
+summary(lm_poly_6th)$r.squared
+
+## creating a data frame t with column name Hour and value 20.93 (20:56) Input to predict function must be data frame, with column name set as x value
+
+t=data.frame(Hour=(20.93))
+
+
+## To predict the traffic at t=20.56 we'll use the predict function
+
+#t_pred=t %>% mutate("Pred_traffic"=round(predict(lm_poly_6th,t)))
+t_pred=round(predict(lm_poly_6th,t),2)
+t_pred
+```
+
+
+```{r}
+fig_pred=traffic_by_hour_tall %>% ggplot(mapping=aes(x=Hour,y=Traffic))+
+  geom_line(aes(color=Observation,linetype=Observation))+
+  geom_smooth(method=lm,formula = y~poly(x,degree = 6),se=FALSE,colour="Black")+
+  
+  
+  # Show predicted value as a point in red
+
+geom_point(x=t$Hour,y=t_pred,size=3, colour="red")+
+
+  
+  #add horizontal_line
+  #geom_hline(yintercept = t_pred,linetype="dashed",color="red")+
+  
+  #geom_vline(xintercept = 12.5,linetype="dashed",color="red")+
+  
+  ggtitle(paste("Prediction of expected traffic at t = ",x=t$Hour)) +
+  
+xlab("Hour of the day (24 hour time)") +
+ylab("Internet traffic (Gbps)") +
+theme(plot.title = element_text(hjust = 0.5))
+
+ggplotly(fig_pred)
+
+```
+
+
+
